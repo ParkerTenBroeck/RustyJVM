@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use self::{attribute::*, constant::*, field::*, interface::*, method::*};
 
 pub mod attribute;
@@ -6,9 +8,6 @@ pub mod field;
 pub mod interface;
 pub mod method;
 
-enum MinorVersion {}
-
-enum MajorVersion {}
 
 mycelium_bitfield::bitfield! {
     /// Bitfield types can have doc comments.
@@ -35,6 +34,7 @@ mycelium_bitfield::bitfield! {
     }
 }
 
+#[derive(Debug)]
 pub struct Class {
     minor_version: u16,
     major_version: u16,
@@ -60,9 +60,12 @@ pub struct Class {
     attribute_info: Vec<AttributeEntry>,
 }
 
+#[derive(Debug)]
 pub enum ClassBuilderError {
     InvalidMagic,
     ReachedEndOfFile,
+    StringError,
+    InvalidConstantType(u8),
 }
 
 impl Class {
@@ -90,15 +93,19 @@ impl Class {
 }
 
 trait FromClassFileIter: Sized {
-    fn from(iter: &mut ClassFileIter) -> Result<Self, ClassBuilderError>;
+    fn from_iter(iter: &mut ClassFileIter) -> Result<Self, ClassBuilderError>;
     fn from_arr(iter: &mut ClassFileIter) -> Result<Vec<Self>, ClassBuilderError> {
         let num = iter.next_u16()?;
         let mut vec = Vec::new();
         for _ in 0..num {
-            vec.push(Self::from(iter)?);
+            vec.push(Self::from_iter(iter)?);
         }
         Ok(vec)
     }
+}
+
+trait DebugFmtWithNames{
+    fn fmt(&self, class: &Class, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
 }
 
 pub struct ClassFileIter<'a> {
@@ -129,5 +136,16 @@ impl<'a> ClassFileIter<'a> {
             | ((self.next_u8()? as u32) << 16)
             | ((self.next_u8()? as u32) << 8)
             | ((self.next_u8()? as u32) << 0))
+    }
+
+    pub fn next_u64(&mut self) -> Result<u64, ClassBuilderError> {
+        Ok(((self.next_u8()? as u64) << 54)
+            | ((self.next_u8()? as u64) << 48)
+            | ((self.next_u8()? as u64) << 40)
+            | ((self.next_u8()? as u64) << 32)
+            | ((self.next_u8()? as u64) << 24)
+            | ((self.next_u8()? as u64) << 16)
+            | ((self.next_u8()? as u64) << 8)
+            | ((self.next_u8()? as u64) << 0))
     }
 }

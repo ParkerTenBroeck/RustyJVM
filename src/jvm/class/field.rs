@@ -1,15 +1,21 @@
-use super::FromClassFileIter;
+use super::{attribute::AttributeEntry, FromClassFileIter};
 
+#[derive(Debug)]
 pub struct FieldEntry {
-    access_flags: u16,
+    access_flags: AccessFlags,
     name_index: u16,
     descriptor_index: u16,
-    attributes_count: u16,
+    attributes_count: Vec<AttributeEntry>,
 }
 
 impl FromClassFileIter for FieldEntry {
-    fn from(iter: &mut super::ClassFileIter) -> Result<Self, super::ClassBuilderError> {
-        todo!()
+    fn from_iter(iter: &mut super::ClassFileIter) -> Result<Self, super::ClassBuilderError> {
+        Ok(FieldEntry {
+            access_flags: AccessFlags::from_bits(iter.next_u16()?),
+            name_index: iter.next_u16()?,
+            descriptor_index: iter.next_u16()?,
+            attributes_count: AttributeEntry::from_arr(iter)?,
+        })
     }
 }
 
