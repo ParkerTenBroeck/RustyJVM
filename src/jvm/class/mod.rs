@@ -4,10 +4,10 @@ use self::{attribute::*, constant::*, field::*, interface::*, method::*};
 
 pub mod attribute;
 pub mod constant;
+pub mod debug;
 pub mod field;
 pub mod interface;
 pub mod method;
-
 
 mycelium_bitfield::bitfield! {
     /// Bitfield types can have doc comments.
@@ -34,7 +34,6 @@ mycelium_bitfield::bitfield! {
     }
 }
 
-#[derive(Debug)]
 pub struct Class {
     minor_version: u16,
     major_version: u16,
@@ -66,6 +65,7 @@ pub enum ClassBuilderError {
     ReachedEndOfFile,
     StringError,
     InvalidConstantType(u8),
+    InvalidReferenceKind,
 }
 
 impl Class {
@@ -90,6 +90,38 @@ impl Class {
             attribute_info: FromClassFileIter::from_arr(&mut iter)?,
         })
     }
+
+    pub fn get_const_utd8(&self, index: u16) -> Option<&str> {
+        if let Some(i) = self.constant_pool.get(index as usize) {
+            i.get_utf8()
+        } else {
+            None
+        }
+    }
+
+    pub fn get_constant(&self, index: u16) -> Option<&ConstantPoolEntry> {
+        self.constant_pool.get(index as usize - 1)
+    }
+
+    pub fn get_class_name(&self, index: u16) -> &str {
+        if let Some(i) = self.get_constant(index) {
+            if let ConstantPoolEntry::Class { name_index } = i {
+                self.get_const_utd8_or_invalid(*name_index)
+            } else {
+                "##CONSTANT_NOT_CLASS##"
+            }
+        } else {
+            "##INVALID_INDEX##"
+        }
+    }
+
+    pub fn get_const_utd8_or_invalid(&self, index: u16) -> &str {
+        if let Some(i) = self.get_constant(index) {
+            i.get_utf8().unwrap_or("##CONSTANT_NOT_UTF8##")
+        } else {
+            "##INVALID_INDEX##"
+        }
+    }
 }
 
 trait FromClassFileIter: Sized {
@@ -104,7 +136,7 @@ trait FromClassFileIter: Sized {
     }
 }
 
-trait DebugFmtWithNames{
+trait DebugFmtWithNames {
     fn fmt(&self, class: &Class, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
 }
 
@@ -128,14 +160,14 @@ impl<'a> ClassFileIter<'a> {
     }
 
     pub fn next_u16(&mut self) -> Result<u16, ClassBuilderError> {
-        Ok(((self.next_u8()? as u16) << 8) | ((self.next_u8()? as u16) << 0))
+        Ok(((self.next_u8()? as u16) << 8) | self.next_u8()? as u16)
     }
 
     pub fn next_u32(&mut self) -> Result<u32, ClassBuilderError> {
         Ok(((self.next_u8()? as u32) << 24)
             | ((self.next_u8()? as u32) << 16)
             | ((self.next_u8()? as u32) << 8)
-            | ((self.next_u8()? as u32) << 0))
+            | self.next_u8()? as u32)
     }
 
     pub fn next_u64(&mut self) -> Result<u64, ClassBuilderError> {
@@ -146,6 +178,6 @@ impl<'a> ClassFileIter<'a> {
             | ((self.next_u8()? as u64) << 24)
             | ((self.next_u8()? as u64) << 16)
             | ((self.next_u8()? as u64) << 8)
-            | ((self.next_u8()? as u64) << 0))
+            | self.next_u8()? as u64)
     }
 }

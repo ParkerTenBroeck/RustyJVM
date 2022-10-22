@@ -2,6 +2,7 @@ use super::{ClassBuilderError, FromClassFileIter};
 
 #[derive(Debug)]
 pub enum ConstantPoolEntry {
+    Empty,
     Class {
         name_index: u16,
     },
@@ -30,7 +31,7 @@ pub enum ConstantPoolEntry {
     },
     Utf8(String),
     MethodHandle {
-        reference_kind: u8,
+        reference_kind: ReferenceKind,
         reference_index: u16,
     },
     MethodType {
@@ -42,10 +43,40 @@ pub enum ConstantPoolEntry {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ReferenceKind {
+    GetField,
+    GetStatic,
+    PutField,
+    PutStatic,
+    InvokeVirtual,
+    InvokeStatic,
+    InvokeSpecial,
+    NewInvokeSpecial,
+    InvokeInterface,
+}
+
+impl ReferenceKind {
+    pub fn from_u8(val: u8) -> Option<Self> {
+        Some(match val {
+            1 => Self::GetField,
+            2 => Self::GetStatic,
+            3 => Self::PutField,
+            4 => Self::PutStatic,
+            5 => Self::InvokeVirtual,
+            6 => Self::InvokeStatic,
+            7 => Self::InvokeSpecial,
+            8 => Self::NewInvokeSpecial,
+            9 => Self::InvokeInterface,
+            _ => return None,
+        })
+    }
+}
+
 impl ConstantPoolEntry {
     pub fn get_utf8(&self) -> Option<&str> {
         match self {
-            Self::Utf8(str) => Some(&str),
+            Self::Utf8(str) => Some(str),
             _ => None,
         }
     }
@@ -58,13 +89,16 @@ impl FromClassFileIter for ConstantPoolEntry {
         let mut range = 0..num;
         while let Some(_) = range.next() {
             let item = FromClassFileIter::from_iter(iter)?;
-            if matches!(
+            let two = matches!(
                 item,
                 ConstantPoolEntry::Long(_) | ConstantPoolEntry::Double(_)
-            ) {
+            );
+
+            vec.push(item);
+            if two {
+                vec.push(Self::Empty);
                 let _ = range.next();
             }
-            vec.push(item);
         }
         Ok(vec)
     }
@@ -112,6 +146,7 @@ impl FromClassFileIter for ConstantPoolEntry {
                             i += 1;
                             string.push(x as char);
                         }
+                        #[allow(clippy::unusual_byte_groupings)]
                         0b110_00000..=0b110_11111 => {
                             i += 2;
                             let y = iter.next_u8()?;
@@ -137,7 +172,8 @@ impl FromClassFileIter for ConstantPoolEntry {
                 Ok(ConstantPoolEntry::Utf8(string))
             }
             15 => Ok(ConstantPoolEntry::MethodHandle {
-                reference_kind: iter.next_u8()?,
+                reference_kind: ReferenceKind::from_u8(iter.next_u8()?)
+                    .map_or(Err(ClassBuilderError::InvalidReferenceKind), Ok)?,
                 reference_index: iter.next_u16()?,
             }),
             16 => Ok(ConstantPoolEntry::MethodType {
@@ -147,7 +183,7 @@ impl FromClassFileIter for ConstantPoolEntry {
                 bootstrap_method_attr_index: iter.next_u16()?,
                 name_and_type_index: iter.next_u16()?,
             }),
-            c => return Err(ClassBuilderError::InvalidConstantType(c)),
+            c => Err(ClassBuilderError::InvalidConstantType(c)),
         }
     }
 }

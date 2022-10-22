@@ -1,5 +1,4 @@
-use super::{FromClassFileIter, attribute::AttributeEntry};
-
+use super::{attribute::AttributeEntry, FromClassFileIter};
 
 mycelium_bitfield::bitfield! {
     /// Bitfield types can have doc comments.
@@ -25,15 +24,15 @@ pub struct MethodEntry {
     access_flags: AccessFlags,
     name_index: u16,
     descriptor_index: u16,
-    attributes: Vec<AttributeEntry>
+    attributes: Vec<AttributeEntry>,
 }
 
 impl FromClassFileIter for MethodEntry {
     fn from_iter(iter: &mut super::ClassFileIter) -> Result<Self, super::ClassBuilderError> {
         Ok(MethodEntry {
             access_flags: AccessFlags::from_bits(iter.next_u16()?),
-            name_index:  iter.next_u16()?,
-            descriptor_index:  iter.next_u16()?,
+            name_index: iter.next_u16()?,
+            descriptor_index: iter.next_u16()?,
             attributes: AttributeEntry::from_arr(iter)?,
         })
     }

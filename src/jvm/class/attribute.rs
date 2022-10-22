@@ -8,11 +8,11 @@ pub struct AttributeEntry {
 
 #[derive(Debug)]
 pub enum AttributeInfo {
-    Unparsed(Vec<u8>),
-    ConstantValue{
-        constantvalue_indx: u16
+    Raw(Vec<u8>),
+    ConstantValue {
+        constantvalue_indx: u16,
     },
-    Code{
+    Code {
         max_stack: u16,
         max_locals: u16,
         //len u32
@@ -20,7 +20,7 @@ pub enum AttributeInfo {
         //len u16
         // start_pc: u16, end_pc: u16, handler_pc: u16, catch_type: u16
         exception_table: Vec<()>,
-        attributs: Vec<AttributeInfo>
+        attributs: Vec<AttributeInfo>,
     },
     StackMapTable,
     Exceptions,
@@ -49,7 +49,7 @@ impl FromClassFileIter for AttributeInfo {
         for _ in 0..num {
             vec.push(iter.next_u8()?);
         }
-        Ok(Self::Unparsed(vec))
+        Ok(Self::Raw(vec))
     }
 }
 
