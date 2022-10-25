@@ -187,3 +187,64 @@ impl FromClassFileIter for ConstantPoolEntry {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct ConstantPool {
+    pub constant_pool: Vec<ConstantPoolEntry>,
+}
+
+impl ConstantPool {
+    pub fn take(&mut self) -> Self {
+        let mut tmp = Vec::new();
+        core::mem::swap(&mut tmp, &mut self.constant_pool);
+        Self { constant_pool: tmp }
+    }
+
+    pub fn get_const_utd8(&self, index: u16) -> Option<&str> {
+        if let Some(i) = self.get_constant(index) {
+            i.get_utf8()
+        } else {
+            None
+        }
+    }
+
+    pub fn get_constant(&self, index: u16) -> Option<&ConstantPoolEntry> {
+        self.constant_pool.get(index as usize - 1)
+    }
+
+    pub fn get_class_name(&self, index: u16) -> Option<&str> {
+        if let Some(i) = self.get_constant(index) {
+            if let ConstantPoolEntry::Class { name_index } = i {
+                self.get_const_utd8(*name_index)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn get_class_name_invalid(&self, index: u16) -> &str {
+        if let Some(i) = self.get_constant(index) {
+            if let ConstantPoolEntry::Class { name_index } = i {
+                self.get_const_utd8_or_invalid(*name_index)
+            } else {
+                "##CONSTANT_NOT_CLASS##"
+            }
+        } else {
+            "##INVALID_INDEX##"
+        }
+    }
+
+    pub fn get_const_utd8_or_invalid(&self, index: u16) -> &str {
+        if let Some(i) = self.get_constant(index) {
+            i.get_utf8().unwrap_or("##CONSTANT_NOT_UTF8##")
+        } else {
+            "##INVALID_INDEX##"
+        }
+    }
+
+    pub fn new(constant_pool: Vec<ConstantPoolEntry>) -> ConstantPool {
+        Self { constant_pool }
+    }
+}

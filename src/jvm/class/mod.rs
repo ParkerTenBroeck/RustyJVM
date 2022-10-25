@@ -35,28 +35,28 @@ mycelium_bitfield::bitfield! {
 }
 
 pub struct Class {
-    minor_version: u16,
-    major_version: u16,
+    pub minor_version: u16,
+    pub major_version: u16,
 
     //const_pool_count: u16,
-    constant_pool: Vec<ConstantPoolEntry>,
+    pub constant_pool: ConstantPool,
 
-    access_flags: AccessFlags,
+    pub access_flags: AccessFlags,
 
-    this_class: u16,
-    super_class: u16,
+    pub this_class: u16,
+    pub super_class: u16,
 
     //interfaces_count: u16,
-    interfaces: Vec<InterfaceEntry>,
+    pub interfaces: Vec<InterfaceEntry>,
 
     // field_count: u16,
-    field_info: Vec<FieldEntry>,
+    pub field_info: Vec<FieldEntry>,
 
     // methods_count: u16,
-    method_info: Vec<MethodEntry>,
+    pub method_info: Vec<MethodEntry>,
 
     // attributes_count: u16,
-    attribute_info: Vec<AttributeEntry>,
+    pub attribute_info: Vec<AttributeEntry>,
 }
 
 #[derive(Debug)]
@@ -77,10 +77,10 @@ impl Class {
             return Err(ClassBuilderError::InvalidMagic);
         }
 
-        Ok(Self {
+        let mut class = Self {
             minor_version: iter.next_u16()?,
             major_version: iter.next_u16()?,
-            constant_pool: FromClassFileIter::from_arr(&mut iter)?,
+            constant_pool: ConstantPool::new(FromClassFileIter::from_arr(&mut iter)?),
             access_flags: AccessFlags::from_bits(iter.next_u16()?),
             this_class: iter.next_u16()?,
             super_class: iter.next_u16()?,
@@ -88,39 +88,49 @@ impl Class {
             field_info: FromClassFileIter::from_arr(&mut iter)?,
             method_info: FromClassFileIter::from_arr(&mut iter)?,
             attribute_info: FromClassFileIter::from_arr(&mut iter)?,
-        })
+        };
+
+        class.parse_attributes();
+
+        Ok(class)
     }
 
-    pub fn get_const_utd8(&self, index: u16) -> Option<&str> {
-        if let Some(i) = self.constant_pool.get(index as usize) {
-            i.get_utf8()
+    fn parse_attributes(&mut self) {
+        let mut constants = self.constant_pool.take();
+
+        for attr in &mut self.attribute_info {
+            attr.parse(&mut constants);
+        }
+        for blah in &mut self.method_info {
+            for attr in &mut blah.attributes {
+                attr.parse(&mut constants);
+            }
+        }
+        for blah in &mut self.field_info {
+            for attr in &mut blah.attributes {
+                attr.parse(&mut constants);
+            }
+        }
+
+        self.constant_pool = constants;
+    }
+
+    pub fn get_method_from_name(&self, method_name: &str) -> Option<&MethodEntry> {
+        if let Some(index) = self.method_entry_index_from_name(method_name) {
+            self.method_info.get(index)
         } else {
             None
         }
     }
 
-    pub fn get_constant(&self, index: u16) -> Option<&ConstantPoolEntry> {
-        self.constant_pool.get(index as usize - 1)
-    }
-
-    pub fn get_class_name(&self, index: u16) -> &str {
-        if let Some(i) = self.get_constant(index) {
-            if let ConstantPoolEntry::Class { name_index } = i {
-                self.get_const_utd8_or_invalid(*name_index)
+    fn method_entry_index_from_name(&self, method_name: &str) -> Option<usize> {
+        self.method_info.iter().position(|m| {
+            if let Some(name) = self.constant_pool.get_const_utd8(m.name_index) {
+                name.eq(method_name)
             } else {
-                "##CONSTANT_NOT_CLASS##"
+                false
             }
-        } else {
-            "##INVALID_INDEX##"
-        }
-    }
-
-    pub fn get_const_utd8_or_invalid(&self, index: u16) -> &str {
-        if let Some(i) = self.get_constant(index) {
-            i.get_utf8().unwrap_or("##CONSTANT_NOT_UTF8##")
-        } else {
-            "##INVALID_INDEX##"
-        }
+        })
     }
 }
 
@@ -179,5 +189,13 @@ impl<'a> ClassFileIter<'a> {
             | ((self.next_u8()? as u64) << 16)
             | ((self.next_u8()? as u64) << 8)
             | self.next_u8()? as u64)
+    }
+
+    pub fn next_n_u8(&mut self, len: usize) -> Result<Vec<u8>, ClassBuilderError> {
+        let mut vec = Vec::new();
+        for _ in 0..len {
+            vec.push(self.next_u8()?)
+        }
+        Ok(vec)
     }
 }

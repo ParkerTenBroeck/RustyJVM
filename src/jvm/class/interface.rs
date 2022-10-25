@@ -2,7 +2,7 @@ use super::FromClassFileIter;
 
 #[derive(Debug)]
 pub struct InterfaceEntry {
-    name_index: u16,
+    pub name_index: u16,
 }
 
 impl FromClassFileIter for InterfaceEntry {

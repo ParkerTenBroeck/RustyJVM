@@ -21,10 +21,10 @@ mycelium_bitfield::bitfield! {
 
 #[derive(Debug)]
 pub struct MethodEntry {
-    access_flags: AccessFlags,
-    name_index: u16,
-    descriptor_index: u16,
-    attributes: Vec<AttributeEntry>,
+    pub access_flags: AccessFlags,
+    pub name_index: u16,
+    pub descriptor_index: u16,
+    pub attributes: Vec<AttributeEntry>,
 }
 
 impl FromClassFileIter for MethodEntry {

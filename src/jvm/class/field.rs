@@ -2,10 +2,10 @@ use super::{attribute::AttributeEntry, FromClassFileIter};
 
 #[derive(Debug)]
 pub struct FieldEntry {
-    access_flags: AccessFlags,
-    name_index: u16,
-    descriptor_index: u16,
-    attributes_count: Vec<AttributeEntry>,
+    pub access_flags: AccessFlags,
+    pub name_index: u16,
+    pub descriptor_index: u16,
+    pub attributes: Vec<AttributeEntry>,
 }
 
 impl FromClassFileIter for FieldEntry {
@@ -14,7 +14,7 @@ impl FromClassFileIter for FieldEntry {
             access_flags: AccessFlags::from_bits(iter.next_u16()?),
             name_index: iter.next_u16()?,
             descriptor_index: iter.next_u16()?,
-            attributes_count: AttributeEntry::from_arr(iter)?,
+            attributes: AttributeEntry::from_arr(iter)?,
         })
     }
 }

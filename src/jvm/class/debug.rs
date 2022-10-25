@@ -8,7 +8,7 @@ impl std::fmt::Debug for Class {
             let super_class = if self.super_class == 0 {
                 None
             } else {
-                Some(self.get_class_name(self.super_class))
+                Some(self.constant_pool.get_class_name_invalid(self.super_class))
             };
 
             return f
@@ -17,7 +17,10 @@ impl std::fmt::Debug for Class {
                 .field("major_version", &self.major_version)
                 .field("constat_pool", &ConstantNamePrint { class: self })
                 .field("access_flags", &self.access_flags)
-                .field("class", &self.get_class_name(self.this_class))
+                .field(
+                    "class",
+                    &self.constant_pool.get_class_name_invalid(self.this_class),
+                )
                 .field("super", &super_class)
                 // .field("interfaces", &self.interfaces)
                 // .field("field_info", &self.field_info)
@@ -47,7 +50,7 @@ struct ConstantNamePrint<'a> {
 impl<'a> std::fmt::Debug for ConstantNamePrint<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut m = f.debug_map();
-        for (i, constant) in self.class.constant_pool.iter().enumerate() {
+        for (i, constant) in self.class.constant_pool.constant_pool.iter().enumerate() {
             _ = m.entry(
                 &i,
                 &ConstantEntryNamePrint {
@@ -74,19 +77,24 @@ impl<'a> std::fmt::Debug for ConstantEntryNamePrint<'a> {
             name_and_type_index: u16,
             struct_name: &str,
         ) -> Result<(), std::fmt::Error> {
-            let t = class.get_constant(name_and_type_index);
+            let t = class.constant_pool.get_constant(name_and_type_index);
             let (name, type_str) = match t {
                 Some(ConstantPoolEntry::NameAndType {
                     name_index,
                     descriptor_index,
                 }) => (
-                    class.get_const_utd8_or_invalid(*name_index),
-                    class.get_const_utd8_or_invalid(*descriptor_index),
+                    class.constant_pool.get_const_utd8_or_invalid(*name_index),
+                    class
+                        .constant_pool
+                        .get_const_utd8_or_invalid(*descriptor_index),
                 ),
                 _ => ("##NOT_NAME_AND_TYPE##", "##NOT_NAME_AND_TYPE##"),
             };
             f.debug_struct(struct_name)
-                .field("class", &class.get_class_name(class_index))
+                .field(
+                    "class",
+                    &class.constant_pool.get_class_name_invalid(class_index),
+                )
                 .field("name", &name)
                 .field("type", &type_str)
                 .finish()
@@ -98,7 +106,10 @@ impl<'a> std::fmt::Debug for ConstantEntryNamePrint<'a> {
                 .debug_struct("Class")
                 .field(
                     "class_name",
-                    &self.class.get_const_utd8_or_invalid(*name_index),
+                    &self
+                        .class
+                        .constant_pool
+                        .get_const_utd8_or_invalid(*name_index),
                 )
                 .finish(),
             ConstantPoolEntry::Fieldref {
@@ -133,7 +144,12 @@ impl<'a> std::fmt::Debug for ConstantEntryNamePrint<'a> {
             ),
             ConstantPoolEntry::String { string_index } => f
                 .debug_tuple("String")
-                .field(&self.class.get_const_utd8_or_invalid(*string_index))
+                .field(
+                    &self
+                        .class
+                        .constant_pool
+                        .get_const_utd8_or_invalid(*string_index),
+                )
                 .finish(),
             ConstantPoolEntry::Integer(_) => self.constant.fmt(f),
             ConstantPoolEntry::Float(_) => self.constant.fmt(f),
@@ -144,10 +160,19 @@ impl<'a> std::fmt::Debug for ConstantEntryNamePrint<'a> {
                 descriptor_index,
             } => f
                 .debug_struct("NameAndType")
-                .field("name", &self.class.get_const_utd8_or_invalid(*name_index))
+                .field(
+                    "name",
+                    &self
+                        .class
+                        .constant_pool
+                        .get_const_utd8_or_invalid(*name_index),
+                )
                 .field(
                     "descriptor",
-                    &self.class.get_const_utd8_or_invalid(*descriptor_index),
+                    &self
+                        .class
+                        .constant_pool
+                        .get_const_utd8_or_invalid(*descriptor_index),
                 )
                 .finish(),
             ConstantPoolEntry::Utf8(_) => self.constant.fmt(f),
@@ -155,37 +180,49 @@ impl<'a> std::fmt::Debug for ConstantEntryNamePrint<'a> {
                 reference_kind,
                 reference_index,
             } => {
-                
-                let mut debug = f
-                .debug_struct("MethodHandle")
-                ;
+                let mut debug = f.debug_struct("MethodHandle");
                 debug.field("reference_kind", reference_kind);
-                if let Some(constant @ ConstantPoolEntry::Methodref{..}) = self.class.get_constant(*reference_index){
-                    debug.field("reference", &ConstantEntryNamePrint{ constant, class: self.class });
-                }else{
+                if let Some(constant @ ConstantPoolEntry::Methodref { .. }) =
+                    self.class.constant_pool.get_constant(*reference_index)
+                {
+                    debug.field(
+                        "reference",
+                        &ConstantEntryNamePrint {
+                            constant,
+                            class: self.class,
+                        },
+                    );
+                } else {
                     debug.field("reference", &"##INVALID_METHOD_REFERENCE##");
                 }
                 debug.finish()
-            },
+            }
             ConstantPoolEntry::MethodType { descriptor_index } => f
                 .debug_struct("MethodType")
                 .field(
                     "type",
-                    &self.class.get_const_utd8_or_invalid(*descriptor_index),
+                    &self
+                        .class
+                        .constant_pool
+                        .get_const_utd8_or_invalid(*descriptor_index),
                 )
                 .finish(),
             ConstantPoolEntry::InvokeDynamic {
                 bootstrap_method_attr_index,
                 name_and_type_index,
             } => {
-                let t = self.class.get_constant(*name_and_type_index);
+                let t = self.class.constant_pool.get_constant(*name_and_type_index);
                 let (name, type_str) = match t {
                     Some(ConstantPoolEntry::NameAndType {
                         name_index,
                         descriptor_index,
                     }) => (
-                        self.class.get_const_utd8_or_invalid(*name_index),
-                        self.class.get_const_utd8_or_invalid(*descriptor_index),
+                        self.class
+                            .constant_pool
+                            .get_const_utd8_or_invalid(*name_index),
+                        self.class
+                            .constant_pool
+                            .get_const_utd8_or_invalid(*descriptor_index),
                     ),
                     _ => ("##NOT_NAME_AND_TYPE##", "##NOT_NAME_AND_TYPE##"),
                 };
